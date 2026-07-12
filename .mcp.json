@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "phone": {
+      "command": "uv",
+      "args": ["run", "--directory", "/home/nick/ai_projects/phone_interface",
+               "python", "mcp_server/server.py"],
+      "env": { "PHONE_IF_API_KEY": "${PHONE_IF_API_KEY_HOME_AUTO}" }
+    }
+  }
+}

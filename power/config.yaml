@@ -1,0 +1,29 @@
+# Tapo power monitoring configuration
+devices:
+  - "Dryer-Laundry"
+  - "Dryer-Rumpus"
+  - "Washing Machine"
+
+tariff_per_kwh: 0.30
+currency: AUD
+
+summary_time: "07:30"   # informational; actual schedule lives in crontab
+week_start: monday
+backfill_days: 60
+hourly_backfill_days: 7
+
+db_path: power.db       # relative to this file's directory
+
+lan:
+  iface: enp1s0
+  subnet: "192.168.1"
+
+phone:
+  # Local bridge endpoint — the public https://phone.nescolcrafts.com URL is
+  # Cloudflare-WAF-blocked for non-browser clients, and cron runs on this box.
+  url: "http://127.0.0.1:8787"
+  api_key_env: "PHONE_IF_API_KEY_HOME_AUTO"
+
+dashboard:
+  host: "0.0.0.0"
+  port: 8091   # 8090 is AI Harness

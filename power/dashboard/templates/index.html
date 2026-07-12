@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home Power</title>
+<style>
+:root {
+  --page:        #f9f9f7;
+  --surface:     #fcfcfb;
+  --ink:         #0b0b0b;
+  --ink-2:       #52514e;
+  --muted:       #898781;
+  --grid:        #e1e0d9;
+  --baseline:    #c3c2b7;
+  --border:      rgba(11,11,11,0.10);
+  --series-1:    #2a78d6;
+  --series-2:    #1baf7a;
+  --series-3:    #eda100;
+  --good:        #0ca30c;
+  --delta-down:  #006300;   /* less usage = good */
+  --delta-up:    #d03b3b;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page:        #0d0d0d;
+    --surface:     #1a1a19;
+    --ink:         #ffffff;
+    --ink-2:       #c3c2b7;
+    --muted:       #898781;
+    --grid:        #2c2c2a;
+    --baseline:    #383835;
+    --border:      rgba(255,255,255,0.10);
+    --series-1:    #3987e5;
+    --series-2:    #199e70;
+    --series-3:    #c98500;
+    --delta-down:  #0ca30c;
+    --delta-up:    #e66767;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--page); color: var(--ink);
+  font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.wrap { max-width: 1080px; margin: 0 auto; padding: 20px 16px 48px; }
+header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 18px; }
+header h1 { font-size: 22px; margin: 0; }
+header .as-of { color: var(--muted); font-size: 13px; }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px 16px;
+}
+.dev-head { display: flex; align-items: center; gap: 8px; }
+.dev-head .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
+.dev-head .dot.on { background: var(--good); }
+.dev-head .name { font-weight: 600; }
+.dev-head .state { color: var(--muted); font-size: 13px; margin-left: auto; }
+.dev-watts { font-size: 34px; font-weight: 600; margin: 8px 0 2px; }
+.dev-watts .unit { font-size: 16px; font-weight: 400; color: var(--ink-2); }
+.dev-sub { color: var(--ink-2); font-size: 13px; }
+.dev-meta { color: var(--muted); font-size: 12px; margin-top: 10px; border-top: 1px solid var(--grid); padding-top: 8px; }
+.dev-meta div { display: flex; justify-content: space-between; gap: 8px; }
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 18px; }
+.tile .label { color: var(--ink-2); font-size: 13px; }
+.tile .value { font-size: 30px; font-weight: 600; margin-top: 2px; }
+.tile .value .unit { font-size: 15px; font-weight: 400; color: var(--ink-2); }
+.tile .sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+.tile .delta { font-size: 13px; font-weight: 600; }
+.tile .delta.down { color: var(--delta-down); }
+.tile .delta.up { color: var(--delta-up); }
+
+.filters { display: flex; gap: 6px; align-items: center; margin: 26px 0 10px; flex-wrap: wrap; }
+.filters .seg { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.filters button, .chart-head button, .daynav button {
+  font: inherit; font-size: 13px; color: var(--ink-2); background: none;
+  border: none; padding: 6px 12px; cursor: pointer;
+}
+.filters .seg button.sel { background: var(--grid); color: var(--ink); font-weight: 600; }
+.chart-card { margin-top: 12px; padding: 16px; position: relative; }
+.chart-head { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+.chart-head h2 { font-size: 15px; margin: 0; font-weight: 600; }
+.chart-head .spacer { flex: 1; }
+.chart-head button { border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; }
+.daynav { display: flex; align-items: center; gap: 4px; }
+.daynav input[type=date] {
+  font: inherit; font-size: 13px; color: var(--ink); background: var(--surface);
+  border: 1px solid var(--border); border-radius: 6px; padding: 3px 6px;
+}
+.legend { display: flex; gap: 16px; flex-wrap: wrap; margin: 6px 0 4px; font-size: 13px; color: var(--ink-2); }
+.legend .key { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+svg text { font: 12px system-ui, -apple-system, "Segoe UI", sans-serif; fill: var(--muted); }
+svg .tick-label { font-variant-numeric: tabular-nums; }
+.tooltip {
+  position: absolute; pointer-events: none; z-index: 10; display: none;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.18); padding: 8px 10px; font-size: 13px; min-width: 170px;
+}
+.tooltip .tt-title { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+.tooltip .tt-row { display: flex; align-items: center; gap: 8px; }
+.tooltip .tt-key { width: 12px; height: 3px; border-radius: 2px; flex: none; }
+.tooltip .tt-val { font-weight: 600; font-variant-numeric: tabular-nums; }
+.tooltip .tt-name { color: var(--ink-2); margin-left: auto; }
+table.data { border-collapse: collapse; width: 100%; font-size: 13px; margin-top: 6px; }
+table.data th, table.data td { text-align: right; padding: 4px 10px; border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums; }
+table.data th:first-child, table.data td:first-child { text-align: left; }
+table.data th { color: var(--ink-2); font-weight: 600; }
+.err { color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Home Power</h1>
+    <span class="as-of" id="as-of">loading live status…</span>
+  </header>
+
+  <div class="cards" id="device-cards"></div>
+
+  <div class="tiles" id="tiles"></div>
+
+  <div class="filters" id="range-filter">
+    <span style="color:var(--muted);font-size:13px">Daily range</span>
+    <div class="seg">
+      <button data-days="7">7 days</button>
+      <button data-days="30" class="sel">30 days</button>
+      <button data-days="60">60 days</button>
+    </div>
+  </div>
+
+  <div class="card chart-card" id="daily-card">
+    <div class="chart-head">
+      <h2>Daily usage (kWh)</h2>
+      <div class="spacer"></div>
+      <button data-toggle="daily">Table</button>
+    </div>
+    <div class="legend" data-legend="daily"></div>
+    <div data-plot="daily"></div>
+    <div class="tooltip" data-tt="daily"></div>
+  </div>
+
+  <div class="card chart-card" id="hourly-card">
+    <div class="chart-head">
+      <h2>Hourly profile (kWh)</h2>
+      <div class="daynav">
+        <button id="day-prev" aria-label="previous day">‹</button>
+        <input type="date" id="day-pick">
+        <button id="day-next" aria-label="next day">›</button>
+      </div>
+      <div class="spacer"></div>
+      <button data-toggle="hourly">Table</button>
+    </div>
+    <div class="legend" data-legend="hourly"></div>
+    <div data-plot="hourly"></div>
+    <div class="tooltip" data-tt="hourly"></div>
+  </div>
+</div>
+
+<script>
+const DEVICES = {{ devices | tojson }};
+const TARIFF = {{ tariff | tojson }};
+const seriesVar = i => getComputedStyle(document.documentElement).getPropertyValue(`--series-${i+1}`).trim();
+const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const kwh = wh => wh / 1000;
+const fmtK = (wh, d=1) => kwh(wh).toFixed(d);
+const fmtCost = wh => '$' + (kwh(wh) * TARIFF).toFixed(2);
+const state = { daily: null, hourly: null, days: 30, tables: {} };
+
+/* ---------- device cards ---------- */
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+function renderCards(data) {
+  const wrap = document.getElementById('device-cards');
+  wrap.replaceChildren();
+  for (const d of data.devices) {
+    const card = el('div', 'card');
+    const head = el('div', 'dev-head');
+    const dot = el('span', 'dot' + (d.reachable && d.is_on ? ' on' : ''));
+    head.append(dot, el('span', 'name', d.alias),
+                el('span', 'state', d.reachable ? (d.is_on ? 'on' : 'off') : 'unreachable'));
+    card.append(head);
+    if (d.reachable) {
+      const w = el('div', 'dev-watts', Math.round(d.power_w).toLocaleString());
+      w.append(el('span', 'unit', ' W'));
+      card.append(w);
+      card.append(el('div', 'dev-sub',
+        `today ${fmtK(d.today_wh)} kWh (${fmtCost(d.today_wh)}) · month ${fmtK(d.month_wh)} kWh`));
+      const meta = el('div', 'dev-meta');
+      const rows = [['Model', `${d.model} · fw ${d.fw}`], ['IP / MAC', `${d.ip} · ${d.mac}`],
+                    ['Signal', d.rssi != null ? d.rssi + ' dBm' : '—'],
+                    ['Last collected', d.last_collected || 'never']];
+      for (const [k, v] of rows) {
+        const r = el('div'); r.append(el('span', '', k), el('span', '', v)); meta.append(r);
+      }
+      card.append(meta);
+    } else {
+      card.append(el('div', 'err', 'Not reachable — will retry automatically. Last collected: '
+                                    + (d.last_collected || 'never')));
+    }
+    wrap.append(card);
+  }
+  document.getElementById('as-of').textContent = 'live as of ' + data.ts;
+  renderTiles();  // "today so far" tile depends on live data
+}
+
+/* ---------- stat tiles ---------- */
+let liveData = null, summaryData = null;
+function renderTiles() {
+  if (!summaryData) return;
+  const t = document.getElementById('tiles');
+  t.replaceChildren();
+  const tile = (label, wh, sub) => {
+    const c = el('div', 'card tile');
+    c.append(el('div', 'label', label));
+    const v = el('div', 'value', fmtK(wh));
+    v.append(el('span', 'unit', ' kWh'));
+    c.append(v);
+    if (sub) c.append(sub);
+    return c;
+  };
+  if (liveData) {
+    const todayWh = liveData.devices.reduce((s, d) => s + (d.today_wh || 0), 0);
+    t.append(tile('Today so far', todayWh, el('div', 'sub', fmtCost(todayWh))));
+  }
+  const s = summaryData;
+  t.append(tile('Yesterday', s.yesterday_wh, el('div', 'sub', fmtCost(s.yesterday_wh))));
+  const wtdSub = el('div', 'sub', fmtCost(s.wtd_wh) + ' · week starts Mon ');
+  if (s.prev_week_wh > 0) {
+    const pct = (s.wtd_wh - s.prev_week_wh) / s.prev_week_wh * 100;
+    const d = el('span', 'delta ' + (pct <= 0 ? 'down' : 'up'),
+                 (pct > 0 ? '+' : '') + pct.toFixed(0) + '% vs last week');
+    wtdSub.append(d);
+  }
+  t.append(tile('Week to date', s.wtd_wh, wtdSub));
+  t.append(tile('Last week total', s.prev_week_wh, el('div', 'sub', fmtCost(s.prev_week_wh))));
+}
+
+/* ---------- stacked bar chart ---------- */
+const NS = 'http://www.w3.org/2000/svg';
+function sel(q) { return document.querySelector(q); }
+function niceTicks(max, n=4) {
+  if (max <= 0) return [0, 1];
+  const raw = max / n, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = [1, 2, 5, 10].map(m => m * mag).find(s => s >= raw);
+  const ticks = [];
+  for (let v = 0; v <= max + 1e-9; v += step) ticks.push(v);
+  if (ticks[ticks.length-1] < max) ticks.push(ticks[ticks.length-1] + step);
+  return ticks;
+}
+function topRoundedPath(x, y, w, h, r) {
+  r = Math.min(r, h / 2, w / 2);
+  return `M${x},${y+h} L${x},${y+r} Q${x},${y} ${x+r},${y} L${x+w-r},${y} Q${x+w},${y} ${x+w},${y+r} L${x+w},${y+h} Z`;
+}
+function renderChart(name, labels, series, xTick, ttTitle) {
+  const host = sel(`[data-plot="${name}"]`);
+  host.replaceChildren();
+  if (state.tables[name]) { renderTable(name, labels, series, ttTitle); return; }
+  const W = host.clientWidth || 900, H = 260;
+  const m = { t: 10, r: 8, b: 26, l: 44 };
+  const pw = W - m.l - m.r, ph = H - m.t - m.b;
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('width', '100%');
+  const totals = labels.map((_, i) => DEVICES.reduce((s, a) => s + series[a][i], 0));
+  const ticks = niceTicks(kwh(Math.max(...totals, 1)));
+  const yMax = ticks[ticks.length - 1];
+  const y = v => m.t + ph - (kwh(v) / yMax) * ph;
+  const band = pw / labels.length;
+  const bw = Math.min(24, Math.max(3, band - Math.max(2, band * 0.25)));
+  const surface = cssVar('--surface');
+
+  for (const tv of ticks) {
+    const gy = m.t + ph - (tv / yMax) * ph;
+    const ln = document.createElementNS(NS, 'line');
+    ln.setAttribute('x1', m.l); ln.setAttribute('x2', W - m.r);
+    ln.setAttribute('y1', gy); ln.setAttribute('y2', gy);
+    ln.setAttribute('stroke', tv === 0 ? cssVar('--baseline') : cssVar('--grid'));
+    svg.append(ln);
+    const tx = document.createElementNS(NS, 'text');
+    tx.setAttribute('x', m.l - 8); tx.setAttribute('y', gy + 4);
+    tx.setAttribute('text-anchor', 'end'); tx.setAttribute('class', 'tick-label');
+    tx.textContent = tv;
+    svg.append(tx);
+  }
+  const xEvery = Math.ceil(labels.length / (pw / 60));
+  labels.forEach((lab, i) => {
+    if (i % xEvery) return;
+    const tx = document.createElementNS(NS, 'text');
+    tx.setAttribute('x', m.l + band * i + band / 2);
+    tx.setAttribute('y', H - 8);
+    tx.setAttribute('text-anchor', 'middle');
+    tx.textContent = xTick(lab);
+    svg.append(tx);
+  });
+
+  labels.forEach((lab, i) => {
+    const x = m.l + band * i + (band - bw) / 2;
+    let cursor = m.t + ph;                       // baseline
+    const segs = DEVICES.map((a, si) => ({ a, si, wh: series[a][i] })).filter(s => s.wh > 0);
+    const g = document.createElementNS(NS, 'g');
+    segs.forEach((s, k) => {
+      const hpx = (kwh(s.wh) / yMax) * ph;
+      const top = cursor - hpx;
+      const isTop = k === segs.length - 1;
+      let mark;
+      if (isTop) {
+        mark = document.createElementNS(NS, 'path');
+        mark.setAttribute('d', topRoundedPath(x, top, bw, hpx, 4));
+      } else {
+        mark = document.createElementNS(NS, 'rect');
+        mark.setAttribute('x', x); mark.setAttribute('y', top);
+        mark.setAttribute('width', bw); mark.setAttribute('height', hpx);
+      }
+      mark.setAttribute('fill', seriesVar(s.si));
+      if (k > 0) {                               // 2px surface gap between segments
+        mark.setAttribute('stroke', surface);
+        mark.setAttribute('stroke-width', 2);
+        mark.setAttribute('paint-order', 'stroke');
+      }
+      g.append(mark);
+      cursor = top;
+    });
+    // column-wide hit target, bigger than the marks
+    const hit = document.createElementNS(NS, 'rect');
+    hit.setAttribute('x', m.l + band * i); hit.setAttribute('y', m.t);
+    hit.setAttribute('width', band); hit.setAttribute('height', ph);
+    hit.setAttribute('fill', 'transparent');
+    hit.addEventListener('pointerenter', () => { g.setAttribute('opacity', '0.8'); });
+    hit.addEventListener('pointerleave', () => { g.removeAttribute('opacity'); hideTip(name); });
+    hit.addEventListener('pointermove', ev => showTip(name, ev, ttTitle(lab), i, series));
+    svg.append(g, hit);
+  });
+  host.append(svg);
+}
+function showTip(name, ev, title, i, series) {
+  const tt = sel(`[data-tt="${name}"]`);
+  tt.replaceChildren();
+  tt.append(el('div', 'tt-title', title));
+  let total = 0;
+  DEVICES.forEach((a, si) => {
+    const wh = series[a][i]; total += wh;
+    const row = el('div', 'tt-row');
+    const key = el('span', 'tt-key'); key.style.background = seriesVar(si);
+    row.append(key, el('span', 'tt-val', fmtK(wh, 2) + ' kWh'), el('span', 'tt-name', a));
+    tt.append(row);
+  });
+  const row = el('div', 'tt-row');
+  row.append(el('span', 'tt-key'), el('span', 'tt-val', fmtK(total, 2) + ' kWh'),
+             el('span', 'tt-name', 'total · ' + fmtCost(total)));
+  tt.append(row);
+  const card = tt.parentElement, r = card.getBoundingClientRect();
+  tt.style.display = 'block';
+  let lx = ev.clientX - r.left + 14;
+  if (lx + tt.offsetWidth > r.width - 8) lx = ev.clientX - r.left - tt.offsetWidth - 14;
+  tt.style.left = lx + 'px';
+  tt.style.top = (ev.clientY - r.top + 12) + 'px';
+}
+function hideTip(name) { sel(`[data-tt="${name}"]`).style.display = 'none'; }
+
+function renderTable(name, labels, series, ttTitle) {
+  const host = sel(`[data-plot="${name}"]`);
+  const tbl = el('table', 'data');
+  const thead = el('thead'), hr = el('tr');
+  hr.append(el('th', '', name === 'daily' ? 'Date' : 'Hour'));
+  DEVICES.forEach(a => hr.append(el('th', '', a + ' (kWh)')));
+  hr.append(el('th', '', 'Total (kWh)'), el('th', '', 'Cost'));
+  thead.append(hr); tbl.append(thead);
+  const tb = el('tbody');
+  labels.forEach((lab, i) => {
+    const tr = el('tr');
+    tr.append(el('td', '', ttTitle(lab)));
+    let total = 0;
+    DEVICES.forEach(a => { total += series[a][i]; tr.append(el('td', '', fmtK(series[a][i], 2))); });
+    tr.append(el('td', '', fmtK(total, 2)), el('td', '', fmtCost(total)));
+    tb.append(tr);
+  });
+  tbl.append(tb);
+  host.replaceChildren(tbl);
+}
+
+function renderLegend(name) {
+  const lg = sel(`[data-legend="${name}"]`);
+  lg.replaceChildren();
+  DEVICES.forEach((a, si) => {
+    const item = el('span');
+    const key = el('span', 'key'); key.style.background = seriesVar(si);
+    item.append(key, document.createTextNode(a));
+    lg.append(item);
+  });
+}
+
+/* ---------- data + wiring ---------- */
+const fmtDate = d => new Date(d + 'T00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+function drawDaily() {
+  if (!state.daily) return;
+  renderChart('daily', state.daily.dates, state.daily.series, fmtDate,
+              d => new Date(d + 'T00:00').toLocaleDateString(undefined,
+                   { weekday: 'short', day: 'numeric', month: 'short' }));
+}
+function drawHourly() {
+  if (!state.hourly) return;
+  renderChart('hourly', state.hourly.hours, state.hourly.series,
+              h => String(h).padStart(2, '0'), h => `${state.hourly.day} ${String(h).padStart(2, '0')}:00`);
+}
+async function loadDaily() {
+  state.daily = await (await fetch(`/api/daily?days=${state.days}`)).json();
+  drawDaily();
+}
+async function loadHourly(day) {
+  state.hourly = await (await fetch('/api/hourly' + (day ? `?day=${day}` : ''))).json();
+  const pick = document.getElementById('day-pick');
+  pick.value = state.hourly.day;
+  if (state.hourly.min_day) pick.min = state.hourly.min_day;
+  pick.max = new Date().toISOString().slice(0, 10);
+  drawHourly();
+}
+async function loadLive() {
+  try {
+    liveData = await (await fetch('/api/live')).json();
+    renderCards(liveData);
+  } catch {
+    document.getElementById('as-of').textContent = 'live status unavailable';
+  }
+}
+async function loadSummary() {
+  summaryData = await (await fetch('/api/summary')).json();
+  renderTiles();
+}
+
+document.getElementById('range-filter').addEventListener('click', ev => {
+  const b = ev.target.closest('button[data-days]');
+  if (!b) return;
+  document.querySelectorAll('#range-filter button').forEach(x => x.classList.remove('sel'));
+  b.classList.add('sel');
+  state.days = +b.dataset.days;
+  loadDaily();
+});
+document.querySelectorAll('button[data-toggle]').forEach(b => b.addEventListener('click', () => {
+  const name = b.dataset.toggle;
+  state.tables[name] = !state.tables[name];
+  b.textContent = state.tables[name] ? 'Chart' : 'Table';
+  name === 'daily' ? drawDaily() : drawHourly();
+}));
+const shiftDay = n => {
+  const d = new Date(state.hourly.day + 'T00:00');
+  d.setDate(d.getDate() + n);
+  loadHourly(d.toISOString().slice(0, 10));
+};
+document.getElementById('day-prev').addEventListener('click', () => shiftDay(-1));
+document.getElementById('day-next').addEventListener('click', () => shiftDay(1));
+document.getElementById('day-pick').addEventListener('change', ev => loadHourly(ev.target.value));
+
+renderLegend('daily'); renderLegend('hourly');
+loadSummary(); loadDaily(); loadHourly(); loadLive();
+setInterval(loadLive, 30000);
+let rsz; addEventListener('resize', () => { clearTimeout(rsz); rsz = setTimeout(() => { drawDaily(); drawHourly(); }, 150); });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+  renderLegend('daily'); renderLegend('hourly'); drawDaily(); drawHourly();
+  if (liveData) renderCards(liveData);
+});
+</script>
+</body>
+</html>
