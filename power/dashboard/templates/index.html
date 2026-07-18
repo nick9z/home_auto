@@ -113,6 +113,9 @@ table.data th { color: var(--ink-2); font-weight: 600; }
 .dev-temp { font-size: 34px; font-weight: 600; margin: 8px 0 2px; }
 .dev-temp .unit { font-size: 16px; font-weight: 400; color: var(--ink-2); }
 .warn { color: var(--delta-up); font-weight: 600; }
+.chart-head .seg { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.chart-head .seg button { padding: 5px 10px; border: none; }
+.chart-head .seg button.sel { background: var(--grid); color: var(--ink); font-weight: 600; }
 </style>
 </head>
 <body>
@@ -164,6 +167,25 @@ table.data th { color: var(--ink-2); font-weight: 600; }
     <div data-plot="hourly"></div>
     <div class="tooltip" data-tt="hourly"></div>
   </div>
+
+  <div class="card chart-card" id="trend-card" style="display:none">
+    <div class="chart-head">
+      <h2>Sensor trend</h2>
+      <div class="daynav">
+        <button id="sday-prev" aria-label="previous day">‹</button>
+        <input type="date" id="sday-pick">
+        <button id="sday-next" aria-label="next day">›</button>
+      </div>
+      <div class="seg" id="metric-toggle">
+        <button data-metric="temp" class="sel">Temp °C</button>
+        <button data-metric="humidity">Humidity %</button>
+      </div>
+      <div class="spacer"></div>
+    </div>
+    <div class="legend" data-legend="trend"></div>
+    <div data-plot="trend"></div>
+    <div class="tooltip" data-tt="trend"></div>
+  </div>
 </div>
 
 <script>
@@ -174,7 +196,7 @@ const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(
 const kwh = wh => wh / 1000;
 const fmtK = (wh, d=1) => kwh(wh).toFixed(d);
 const fmtCost = wh => '$' + (kwh(wh) * TARIFF).toFixed(2);
-const state = { daily: null, hourly: null, days: 30, tables: {} };
+const state = { daily: null, hourly: null, days: 30, tables: {}, trend: null, metric: 'temp' };
 
 /* ---------- device cards ---------- */
 function el(tag, cls, text) {
@@ -445,6 +467,154 @@ function renderLegend(name) {
   });
 }
 
+/* ---------- sensor trend line chart ---------- */
+function niceNum(x, round) {
+  if (x <= 0) return 1;
+  const exp = Math.floor(Math.log10(x)), f = x / Math.pow(10, exp);
+  let nf;
+  if (round) nf = f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10;
+  else       nf = f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10;
+  return nf * Math.pow(10, exp);
+}
+function niceScale(min, max, n = 4) {
+  if (min === max) { min -= 1; max += 1; }
+  const step = niceNum((max - min) / (n - 1), true);
+  const lo = Math.floor(min / step) * step, hi = Math.ceil(max / step) * step;
+  const ticks = [];
+  for (let v = lo; v <= hi + step * 0.5; v += step) ticks.push(+v.toFixed(4));
+  return ticks;
+}
+const trendUnit = () => state.metric === 'temp' ? '°C' : '%';
+const trendVal = p => state.metric === 'temp' ? p.temp_c : p.humidity;
+
+function renderTrendLegend(names) {
+  const lg = sel('[data-legend="trend"]');
+  lg.replaceChildren();
+  names.forEach((n, si) => {
+    const item = el('span');
+    const key = el('span', 'key'); key.style.background = seriesVar(si);
+    item.append(key, document.createTextNode(n));
+    lg.append(item);
+  });
+}
+function renderTrend() {
+  const card = document.getElementById('trend-card');
+  const data = state.trend;
+  if (!data) return;
+  const names = Object.keys(data.series);
+  card.style.display = names.length ? '' : 'none';
+  if (!names.length) return;
+  renderTrendLegend(names);
+  const host = sel('[data-plot="trend"]');
+  host.replaceChildren();
+
+  const vals = [];
+  names.forEach(n => data.series[n].forEach(p => { const v = trendVal(p); if (v != null) vals.push(v); }));
+  if (!vals.length) { host.append(el('div', 'err', 'No readings for this day yet.')); return; }
+
+  const W = host.clientWidth || 900, H = 260;
+  const m = { t: 10, r: 12, b: 26, l: 44 };
+  const pw = W - m.l - m.r, ph = H - m.t - m.b;
+  const ticks = niceScale(Math.min(...vals), Math.max(...vals));
+  const vmin = ticks[0], vmax = ticks[ticks.length - 1];
+  const x = t => m.l + (t / 1440) * pw;
+  const y = v => m.t + ph - ((v - vmin) / (vmax - vmin)) * ph;
+
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('width', '100%');
+
+  for (const tv of ticks) {
+    const gy = y(tv);
+    const ln = document.createElementNS(NS, 'line');
+    ln.setAttribute('x1', m.l); ln.setAttribute('x2', W - m.r);
+    ln.setAttribute('y1', gy); ln.setAttribute('y2', gy);
+    ln.setAttribute('stroke', cssVar('--grid'));
+    svg.append(ln);
+    const tx = document.createElementNS(NS, 'text');
+    tx.setAttribute('x', m.l - 8); tx.setAttribute('y', gy + 4);
+    tx.setAttribute('text-anchor', 'end'); tx.setAttribute('class', 'tick-label');
+    tx.textContent = tv;
+    svg.append(tx);
+  }
+  [0, 6, 12, 18, 24].forEach(h => {
+    const tx = document.createElementNS(NS, 'text');
+    tx.setAttribute('x', x(h * 60)); tx.setAttribute('y', H - 8);
+    tx.setAttribute('text-anchor', 'middle');
+    tx.textContent = String(h).padStart(2, '0');
+    svg.append(tx);
+  });
+
+  names.forEach((n, si) => {
+    const pts = data.series[n].filter(p => trendVal(p) != null).sort((a, b) => a.t - b.t);
+    if (!pts.length) return;
+    const d = pts.map((p, i) => (i ? 'L' : 'M') + x(p.t).toFixed(1) + ',' + y(trendVal(p)).toFixed(1)).join(' ');
+    const path = document.createElementNS(NS, 'path');
+    path.setAttribute('d', d);
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', seriesVar(si));
+    path.setAttribute('stroke-width', 2);
+    path.setAttribute('stroke-linejoin', 'round');
+    path.setAttribute('stroke-linecap', 'round');
+    svg.append(path);
+    pts.forEach(p => {
+      const c = document.createElementNS(NS, 'circle');
+      c.setAttribute('cx', x(p.t)); c.setAttribute('cy', y(trendVal(p)));
+      c.setAttribute('r', 2.4); c.setAttribute('fill', seriesVar(si));
+      svg.append(c);
+    });
+  });
+
+  // hover: nearest sample time across all sensors
+  const allTimes = [...new Set(vals.length ? names.flatMap(n => data.series[n].map(p => p.t)) : [])].sort((a, b) => a - b);
+  const hit = document.createElementNS(NS, 'rect');
+  hit.setAttribute('x', m.l); hit.setAttribute('y', m.t);
+  hit.setAttribute('width', pw); hit.setAttribute('height', ph);
+  hit.setAttribute('fill', 'transparent');
+  const guide = document.createElementNS(NS, 'line');
+  guide.setAttribute('y1', m.t); guide.setAttribute('y2', m.t + ph);
+  guide.setAttribute('stroke', cssVar('--baseline')); guide.setAttribute('display', 'none');
+  svg.append(guide, hit);
+  hit.addEventListener('pointermove', ev => {
+    const r = svg.getBoundingClientRect();
+    const t = ((ev.clientX - r.left) / r.width * W - m.l) / pw * 1440;
+    let nt = allTimes[0];
+    for (const tt of allTimes) if (Math.abs(tt - t) < Math.abs(nt - t)) nt = tt;
+    guide.setAttribute('display', ''); guide.setAttribute('x1', x(nt)); guide.setAttribute('x2', x(nt));
+    showTrendTip(ev, nt, names);
+  });
+  hit.addEventListener('pointerleave', () => { guide.setAttribute('display', 'none'); hideTip('trend'); });
+  host.append(svg);
+}
+function showTrendTip(ev, t, names) {
+  const tt = sel('[data-tt="trend"]');
+  tt.replaceChildren();
+  const hh = String(Math.floor(t / 60)).padStart(2, '0'), mm = String(t % 60).padStart(2, '0');
+  tt.append(el('div', 'tt-title', `${hh}:${mm}`));
+  names.forEach((n, si) => {
+    const p = state.trend.series[n].find(q => q.t === t);
+    if (!p || trendVal(p) == null) return;
+    const row = el('div', 'tt-row');
+    const key = el('span', 'tt-key'); key.style.background = seriesVar(si);
+    row.append(key, el('span', 'tt-val', trendVal(p) + trendUnit()), el('span', 'tt-name', n));
+    tt.append(row);
+  });
+  const card = tt.parentElement, r = card.getBoundingClientRect();
+  tt.style.display = 'block';
+  let lx = ev.clientX - r.left + 14;
+  if (lx + tt.offsetWidth > r.width - 8) lx = ev.clientX - r.left - tt.offsetWidth - 14;
+  tt.style.left = lx + 'px';
+  tt.style.top = (ev.clientY - r.top + 12) + 'px';
+}
+async function loadTrend(day) {
+  state.trend = await (await fetch('/api/sensor_history' + (day ? `?day=${day}` : ''))).json();
+  const pick = document.getElementById('sday-pick');
+  pick.value = state.trend.day;
+  if (state.trend.min_day) pick.min = state.trend.min_day;
+  pick.max = new Date().toISOString().slice(0, 10);
+  renderTrend();
+}
+
 /* ---------- data + wiring ---------- */
 const fmtDate = d => new Date(d + 'T00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 function drawDaily() {
@@ -506,13 +676,31 @@ document.getElementById('day-prev').addEventListener('click', () => shiftDay(-1)
 document.getElementById('day-next').addEventListener('click', () => shiftDay(1));
 document.getElementById('day-pick').addEventListener('change', ev => loadHourly(ev.target.value));
 
+const shiftTrendDay = n => {
+  const d = new Date(state.trend.day + 'T00:00');
+  d.setDate(d.getDate() + n);
+  loadTrend(d.toISOString().slice(0, 10));
+};
+document.getElementById('sday-prev').addEventListener('click', () => shiftTrendDay(-1));
+document.getElementById('sday-next').addEventListener('click', () => shiftTrendDay(1));
+document.getElementById('sday-pick').addEventListener('change', ev => loadTrend(ev.target.value));
+document.getElementById('metric-toggle').addEventListener('click', ev => {
+  const b = ev.target.closest('button[data-metric]');
+  if (!b) return;
+  document.querySelectorAll('#metric-toggle button').forEach(x => x.classList.remove('sel'));
+  b.classList.add('sel');
+  state.metric = b.dataset.metric;
+  renderTrend();
+});
+
 renderLegend('daily'); renderLegend('hourly');
-loadSummary(); loadDaily(); loadHourly(); loadLive(); loadSensors();
+loadSummary(); loadDaily(); loadHourly(); loadLive(); loadSensors(); loadTrend();
 setInterval(loadLive, 30000);
 setInterval(loadSensors, 60000);
-let rsz; addEventListener('resize', () => { clearTimeout(rsz); rsz = setTimeout(() => { drawDaily(); drawHourly(); }, 150); });
+setInterval(() => loadTrend(state.trend && state.trend.day), 60000);
+let rsz; addEventListener('resize', () => { clearTimeout(rsz); rsz = setTimeout(() => { drawDaily(); drawHourly(); renderTrend(); }, 150); });
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-  renderLegend('daily'); renderLegend('hourly'); drawDaily(); drawHourly();
+  renderLegend('daily'); renderLegend('hourly'); drawDaily(); drawHourly(); renderTrend();
   if (liveData) renderCards(liveData);
 });
 </script>

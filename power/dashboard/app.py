@@ -133,6 +133,32 @@ async def api_sensors():
     return {"sensors": out}
 
 
+@app.get("/api/sensor_history")
+async def api_sensor_history(day: str = ""):
+    """Per-sensor temp/humidity samples for one local day, for the trend chart.
+
+    Each point carries minutes-since-midnight (t) so the chart can place it on a
+    fixed 0..1440 x-axis regardless of how many samples exist. Offline samples
+    (temp NULL) are dropped so lines only span times the sensor was reporting.
+    """
+    cfg = db.load_config()
+    conn = db.connect(cfg)
+    day = day or date.today().isoformat()
+    names = {r["sensor_id"]: r["name"] for r in db.latest_sensor_readings(conn)}
+    series: dict[str, list] = {}
+    for r in db.sensor_history(conn, day):
+        if r["temp_c"] is None:
+            continue
+        name = names.get(r["sensor_id"], r["sensor_id"])
+        minutes = int(r["ts"][11:13]) * 60 + int(r["ts"][14:16])
+        series.setdefault(name, []).append(
+            {"t": minutes, "temp_c": r["temp_c"], "humidity": r["humidity"]}
+        )
+    first = conn.execute("SELECT MIN(substr(ts,1,10)) FROM sensor_readings").fetchone()[0]
+    conn.close()
+    return {"day": day, "series": series, "min_day": first}
+
+
 @app.get("/api/live")
 async def api_live():
     async with _live_cache["lock"]:

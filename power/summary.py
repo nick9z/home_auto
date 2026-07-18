@@ -62,12 +62,16 @@ def build_summary(conn, cfg: dict, today: date | None = None) -> tuple[str, str]
     if sensor_lines:
         lines.append("")  # blank separator
         lines.extend(sensor_lines)
+        link = cfg.get("dashboard", {}).get("link")
+        if link:
+            lines.append(f"📈 Trend chart: {link}")
     return title, "\n".join(lines)
 
 
 def build_sensor_lines(conn, yesterday: date) -> list[str]:
-    """Temp/humidity lines for the morning push: current reading + yesterday's
-    range per sensor, plus offline / low-battery warnings."""
+    """Temp/humidity digest for the morning push: yesterday's daily trend
+    (min/max/avg temp + humidity range) and current reading per sensor, plus
+    offline / low-battery warnings."""
     latest = db.latest_sensor_readings(conn)
     if not latest:
         return []
@@ -75,17 +79,22 @@ def build_sensor_lines(conn, yesterday: date) -> list[str]:
 
     lines = []
     for r in latest:
-        if r["online"] and r["temp_c"] is not None:
-            line = f"{r['name']}: now {r['temp_c']:.1f}°C {r['humidity']}%RH"
-            s = stats.get(r["sensor_id"])
-            if s and s["n"]:
-                line += f" · yest {s['tmin']:.0f}–{s['tmax']:.0f}°C"
-            if r["battery_low"]:
-                line = "🔋 " + line + " — LOW BATTERY"
-            else:
-                line = "🌡 " + line
+        s = stats.get(r["sensor_id"])
+        if s and s["n"]:
+            line = (f"{r['name']}: yest {s['tmin']:.0f}–{s['tmax']:.0f}°C "
+                    f"(avg {s['tavg']:.0f}), {s['hmin']:.0f}–{s['hmax']:.0f}%RH")
+            if r["online"] and r["temp_c"] is not None:
+                line += f" · now {r['temp_c']:.0f}°C {r['humidity']}%"
+        elif r["online"] and r["temp_c"] is not None:
+            line = (f"{r['name']}: now {r['temp_c']:.1f}°C {r['humidity']}%RH "
+                    "(building daily history)")
         else:
-            line = f"⚠ {r['name']}: offline"
+            lines.append(f"⚠ {r['name']}: offline — check battery")
+            continue
+        if r["battery_low"]:
+            line = "🔋 " + line + " — LOW BATTERY"
+        else:
+            line = "🌡 " + line
         lines.append(line)
     return lines
 
