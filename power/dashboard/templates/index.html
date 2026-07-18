@@ -109,6 +109,10 @@ table.data th, table.data td { text-align: right; padding: 4px 10px; border-bott
 table.data th:first-child, table.data td:first-child { text-align: left; }
 table.data th { color: var(--ink-2); font-weight: 600; }
 .err { color: var(--muted); font-size: 13px; }
+.section-h { font-size: 15px; font-weight: 600; margin: 26px 0 10px; }
+.dev-temp { font-size: 34px; font-weight: 600; margin: 8px 0 2px; }
+.dev-temp .unit { font-size: 16px; font-weight: 400; color: var(--ink-2); }
+.warn { color: var(--delta-up); font-weight: 600; }
 </style>
 </head>
 <body>
@@ -121,6 +125,9 @@ table.data th { color: var(--ink-2); font-weight: 600; }
   <div class="cards" id="device-cards"></div>
 
   <div class="tiles" id="tiles"></div>
+
+  <h2 class="section-h" id="sensor-head" style="display:none">Temperature &amp; Humidity</h2>
+  <div class="cards" id="sensor-cards"></div>
 
   <div class="filters" id="range-filter">
     <span style="color:var(--muted);font-size:13px">Daily range</span>
@@ -208,6 +215,48 @@ function renderCards(data) {
   }
   document.getElementById('as-of').textContent = 'live as of ' + data.ts;
   renderTiles();  // "today so far" tile depends on live data
+}
+
+/* ---------- sensor cards (temp/humidity) ---------- */
+function renderSensors(data) {
+  const wrap = document.getElementById('sensor-cards');
+  const head = document.getElementById('sensor-head');
+  wrap.replaceChildren();
+  const list = (data && data.sensors) || [];
+  head.style.display = list.length ? '' : 'none';
+  for (const s of list) {
+    const card = el('div', 'card');
+    const h = el('div', 'dev-head');
+    h.append(el('span', 'dot' + (s.online ? ' on' : '')), el('span', 'name', s.name),
+             el('span', 'state', s.online ? 'online' : 'offline'));
+    card.append(h);
+    if (s.online && s.temp_c != null) {
+      const t = el('div', 'dev-temp', s.temp_c.toFixed(1));
+      t.append(el('span', 'unit', ' °C'));
+      card.append(t);
+      card.append(el('div', 'dev-sub', `${s.humidity}% humidity`));
+      const meta = el('div', 'dev-meta');
+      const range = (s.today_tmin != null)
+        ? `${s.today_tmin.toFixed(1)}–${s.today_tmax.toFixed(1)} °C` : '—';
+      const rows = [['Model', s.model], ['Today range', range],
+                    ['Last reading', s.ts || 'never']];
+      for (const [k, v] of rows) {
+        const r = el('div'); r.append(el('span', '', k), el('span', '', v)); meta.append(r);
+      }
+      if (s.battery_low) {
+        const r = el('div'); r.append(el('span', 'warn', 'Battery'),
+                                     el('span', 'warn', 'LOW')); meta.append(r);
+      }
+      card.append(meta);
+    } else {
+      card.append(el('div', 'err',
+        'Sensor offline — check its battery. Last reading: ' + (s.ts || 'never')));
+    }
+    wrap.append(card);
+  }
+}
+async function loadSensors() {
+  try { renderSensors(await (await fetch('/api/sensors')).json()); } catch {}
 }
 
 /* ---------- stat tiles ---------- */
@@ -458,8 +507,9 @@ document.getElementById('day-next').addEventListener('click', () => shiftDay(1))
 document.getElementById('day-pick').addEventListener('change', ev => loadHourly(ev.target.value));
 
 renderLegend('daily'); renderLegend('hourly');
-loadSummary(); loadDaily(); loadHourly(); loadLive();
+loadSummary(); loadDaily(); loadHourly(); loadLive(); loadSensors();
 setInterval(loadLive, 30000);
+setInterval(loadSensors, 60000);
 let rsz; addEventListener('resize', () => { clearTimeout(rsz); rsz = setTimeout(() => { drawDaily(); drawHourly(); }, 150); });
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
   renderLegend('daily'); renderLegend('hourly'); drawDaily(); drawHourly();

@@ -57,7 +57,37 @@ def build_summary(conn, cfg: dict, today: date | None = None) -> tuple[str, str]
         pct = (wtd - prev_week) / prev_week * 100
         wtd_line += f" — last week: {_fmt_kwh(prev_week, tariff, cur)} ({pct:+.0f}%)"
     lines.append(wtd_line)
+
+    sensor_lines = build_sensor_lines(conn, yesterday)
+    if sensor_lines:
+        lines.append("")  # blank separator
+        lines.extend(sensor_lines)
     return title, "\n".join(lines)
+
+
+def build_sensor_lines(conn, yesterday: date) -> list[str]:
+    """Temp/humidity lines for the morning push: current reading + yesterday's
+    range per sensor, plus offline / low-battery warnings."""
+    latest = db.latest_sensor_readings(conn)
+    if not latest:
+        return []
+    stats = {r["sensor_id"]: r for r in db.sensor_daily_stats(conn, yesterday.isoformat())}
+
+    lines = []
+    for r in latest:
+        if r["online"] and r["temp_c"] is not None:
+            line = f"{r['name']}: now {r['temp_c']:.1f}°C {r['humidity']}%RH"
+            s = stats.get(r["sensor_id"])
+            if s and s["n"]:
+                line += f" · yest {s['tmin']:.0f}–{s['tmax']:.0f}°C"
+            if r["battery_low"]:
+                line = "🔋 " + line + " — LOW BATTERY"
+            else:
+                line = "🌡 " + line
+        else:
+            line = f"⚠ {r['name']}: offline"
+        lines.append(line)
+    return lines
 
 
 def send_push(cfg: dict, title: str, body: str) -> dict:

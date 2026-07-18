@@ -1,6 +1,25 @@
+## 2026-07-16 — Sensors expansion scoped, blocked on flat T310 battery
+
+**Resume:** `cd /home/nick/ai_gen_proj/home_auto && claude --resume 10d1563f-93a5-46e5-b489-31522bcd9beb`
+
+**Did this session:**
+- Reviewed the project: recapped the existing power-monitoring subsystem (collector/dashboard/summary, all live infra) for the user
+- Scoped a new extension direction — sensors (temp/humidity/motion) — starting with a Tapo T310 the user owns, paired to an H100 hub
+- Confirmed the installed python-kasa 0.10.2 already supports Tapo hub/child devices (`smartchilddevice.py`, `temperaturesensor.py`, `cli/hub.py`) — no new library needed
+- Probed the LAN for the H100 hub: ping-swept + fully scanned `192.168.1.0/24` via `Discover.discover_single`; only the 3 known P110 plugs answered, hub not found
+- User revealed the T310's battery is flat — that's the likely reason the hub/sensor didn't surface; aborted further scoping for this session
+
+**Unfinished / next:**
+- User to replace the T310 battery, then resume sensor scoping
+- If the H100 hub still doesn't show up on a subnet scan afterward, pull its IP directly from the Tapo app's Device Info screen rather than re-scanning blind; also worth checking the Deco app in case the hub sits on a separate guest/IoT subnet
+- No code changes made this session — `power/` subsystem untouched
+
+**Key files touched:**
+- `MEMORY.md`, `memory/sensors-expansion-t310.md` — new durable memory on the blocked sensor extension
+
 ## 2026-07-12 20:24 — Tapo power monitoring: scoped, built, scheduled
 
-**Resume:** `cd /home/nick/ai_projects/home_auto && claude --resume b1885869-2b5c-45b3-a061-6dfcccc75d83`
+**Resume:** `cd /home/nick/ai_gen_proj/home_auto && claude --resume b1885869-2b5c-45b3-a061-6dfcccc75d83`
 
 **Did this session:**
 - Scoped and fully built the Tapo P110 power-monitoring system (`POWER_MONITORING_SCOPE.md` + `power/`)
@@ -24,7 +43,7 @@
 
 ## 2026-07-12 13:30 — Camera discovery + open-vendor purchase path
 
-**Resume:** `cd /home/nick/ai_projects/camera && claude --resume 019f544a-57e0-7231-af6f-466571688ebb`
+**Resume:** `cd /home/nick/ai_gen_proj/camera && claude --resume 019f544a-57e0-7231-af6f-466571688ebb`
 
 **Did this session:**
 - Probed LAN camera at `192.168.1.180` — alive (ping, hostname `Smart_Camera`, MAC `30:be:29:63:9c:23` AltoBeam), **no open TCP ports**, no RTSP/ONVIF/SSDP

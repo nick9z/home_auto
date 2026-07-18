@@ -104,6 +104,35 @@ async def api_hourly(day: str = ""):
     }
 
 
+@app.get("/api/sensors")
+async def api_sensors():
+    """Latest stored temp/humidity per sensor + today's range (from SQLite).
+
+    Served from the DB, not a live hub query, so the page loads fast and never
+    blocks on the hub. The collector refreshes these every 30 minutes.
+    """
+    cfg = db.load_config()
+    conn = db.connect(cfg)
+    today = date.today().isoformat()
+    stats = {r["sensor_id"]: r for r in db.sensor_daily_stats(conn, today)}
+    out = []
+    for r in db.latest_sensor_readings(conn):
+        s = stats.get(r["sensor_id"])
+        out.append({
+            "name": r["name"],
+            "model": r["model"],
+            "online": bool(r["online"]),
+            "temp_c": r["temp_c"],
+            "humidity": r["humidity"],
+            "battery_low": bool(r["battery_low"]),
+            "ts": r["ts"],
+            "today_tmin": s["tmin"] if s and s["n"] else None,
+            "today_tmax": s["tmax"] if s and s["n"] else None,
+        })
+    conn.close()
+    return {"sensors": out}
+
+
 @app.get("/api/live")
 async def api_live():
     async with _live_cache["lock"]:
