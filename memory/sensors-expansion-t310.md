@@ -15,9 +15,17 @@ cached in the `devices` table (alias "Smart Hub H100", model H100) →
 `db.cached_hub_ip()`. `summary.py` morning push now appends per-sensor lines
 (now-reading + yesterday range + offline/low-battery warnings). Dashboard has a
 `/api/sensors` endpoint + "Temperature & Humidity" cards. Verified end-to-end;
-"Laundry Cupboard-Books" logging 35.6°C/27%. Second T310 "Temperature Humidity
-Sensor" still offline (flat battery — user replacing; will auto-appear online
-once battery in). NOTE: hub's `get_temp_humidity_records` 24h history buffer
+"Laundry Cupboard-Books" logging 35.6°C/27%.
+
+**UPDATE 2026-07-25:** both T310s are online now — the second one (was
+flat-battery/offline, previously showed as "Temperature Humidity Sensor") has
+a battery in and is reporting 24.1°C/45% RH. Renamed it to **"Storage Room"**
+via the Tapo phone app directly (the actual device/hub nickname), confirmed by
+re-running `sensor_collector.py` and seeing "Storage Room" come back from the
+raw `get_child_device_list` query. (An earlier config-side `sensor_names`
+override in `power/config.yaml` was tried first, then removed once the app
+rename confirmed working — no override needed since the source nickname is
+now correct.) NOTE: hub's `get_temp_humidity_records` 24h history buffer
 returned all -1000 (empty) — that's why we snapshot instead of pulling history.
 
 ---
