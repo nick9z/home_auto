@@ -1,3 +1,31 @@
+## 2026-07-18 16:20 — T310 sensor monitoring built, live & backed up
+
+**Resume:** `cd /home/nick/ai_gen_proj/home_auto && claude --resume 1332cafe-98e7-4d78-bf4d-df8fc5c34a05`
+
+**Did this session:**
+- **Located the H100 hub** at `192.168.1.150` (MAC `98:25:4A:ED:43:E3`) — it was on the LAN all along; prior scans missed it because `dev.update()` times out on the hub's child query and throws. Identified it via port signature (hub = port 80 only; Deco nodes = 80+443) then a raw `get_device_info` / `get_child_device_list`.
+- Found 3 paired children: T310 **"Laundry Cupboard-Books"** (online, ~35.6°C/27%), a 2nd T310 **"Temperature Humidity Sensor"** (offline — flat battery, user replacing), and an S200B button.
+- **Built sensor monitoring** mirroring the power subsystem: `sensor_client.py` (find hub by model, read children via raw query, no `update()`), `sensor_collector.py` (30-min cron snapshot), new `sensors` + `sensor_readings` SQLite tables, hub IP cached in `devices` table.
+- Wired sensors into the **morning push** (per-sensor daily min/max/avg temp + humidity range + current + offline/low-battery warnings) and added a **dashboard trend chart** (Temp/Humidity toggle, day nav, tooltips) via `/api/sensors` + `/api/sensor_history`.
+- Confirmed phone push is **text-only** (PWA renders body as textContent; shared bridge) — user chose text digest + tap-through dashboard link rather than pushing an image or extending the shared bridge.
+- Two commits pushed to GitHub `main`: `da32bd9` (collector) and `b8d2ae7` (chart + digest).
+
+**Unfinished / next:**
+- 2nd T310 gets a new battery — it'll auto-appear online in the collector/dashboard, no code change needed.
+- Trend chart currently sparse (collection just started 16:01); fills in as the 30-min cron runs. Yesterday min/max/avg appears in the push once a full day is banked.
+- Optional/deferred: a real chart *image* to the phone would need extending the shared `phone_interface` bridge (or a daily email with a rendered PNG) — user declined for now.
+- Dashboard link (`http://192.168.1.106:8091`) only reachable on home wifi.
+
+**Key files touched:**
+- `power/sensor_client.py`, `power/sensor_collector.py` — new (hub discovery + 30-min snapshot collector)
+- `power/db.py` — sensors + sensor_readings tables, `cached_hub_ip`, daily-stats/history helpers
+- `power/summary.py` — sensor digest lines + dashboard link in morning push
+- `power/dashboard/app.py` — `/api/sensors`, `/api/sensor_history`
+- `power/dashboard/templates/index.html` — sensor cards + "Sensor trend" line chart
+- `power/config.yaml` — `dashboard.link`
+- crontab — added `*/30 * * * * … sensor_collector.py`
+- `memory/sensors-expansion-t310.md`, `MEMORY.md` — updated to BUILT & LIVE
+
 ## 2026-07-16 — Sensors expansion scoped, blocked on flat T310 battery
 
 **Resume:** `cd /home/nick/ai_gen_proj/home_auto && claude --resume 10d1563f-93a5-46e5-b489-31522bcd9beb`
