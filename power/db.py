@@ -100,6 +100,17 @@ def cached_ips(conn) -> dict:
     return {r["alias"]: r["last_ip"] for r in conn.execute("SELECT alias, last_ip FROM devices")}
 
 
+def tapo_aliases(cfg: dict) -> list[str]:
+    """cfg['devices'] entries that are Tapo plugs, not Shelly."""
+    shelly = set(cfg.get("shelly") or {})
+    return [a for a in cfg["devices"] if a not in shelly]
+
+
+def shelly_wanted(cfg: dict) -> dict[str, str]:
+    """{alias: mac} for every configured Shelly."""
+    return {alias: spec["mac"] for alias, spec in (cfg.get("shelly") or {}).items()}
+
+
 def cached_hub_ip(conn) -> str | None:
     """Last-known IP of the H100 hub, stored in the devices table like a plug."""
     row = conn.execute(

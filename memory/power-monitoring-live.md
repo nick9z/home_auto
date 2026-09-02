@@ -8,6 +8,8 @@ metadata:
 The `power/` subproject is **running production infrastructure** as of 2026-07-12:
 user crontab (00:15 collector, 07:30 phone summary) and systemd user service
 `power-dashboard` (http://192.168.1.106:8091; port 8090 belongs to AI Harness).
+Devices: 3× Tapo P110 plus Shelly EM Mini Gen4 alias **Hot Water**
+(MAC-keyed; see [[shelly-em-mini-gen4]]).
 
 **Why:** future sessions editing this repo must not rename/move `power/` files or
 break `config.yaml` without updating crontab and the service unit.

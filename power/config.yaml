@@ -1,8 +1,14 @@
-# Tapo power monitoring configuration
+# Tapo + Shelly power monitoring configuration
 devices:
   - "Dryer-Laundry"
   - "Dryer-Rumpus"
   - "Washing Machine"
+  - "Hot Water"
+
+# Shelly devices keyed by MAC (IPs are DHCP). Aliases must also appear in devices:.
+shelly:
+  "Hot Water":
+    mac: "48:F6:EE:DC:47:88"   # EM Mini Gen4, id shellyemminig4-48f6eedc4788
 
 tariff_per_kwh: 0.30
 currency: AUD

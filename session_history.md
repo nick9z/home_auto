@@ -1,3 +1,83 @@
+## 2026-09-02 — Shelly EM Mini Gen4 wired in as Hot Water; online and collecting
+
+**Resume:** Grok session `01a06211-9f42-7c13-96cb-7ddc37f5e0b2` in
+`~/.grok/sessions/%2Fhome%2Fnick%2Fai_gen_proj%2Fhome_auto/`. Prior onboard
+session (found AP + joined `tpdeco`): `01a05666-8bb9-7330-a717-174cb98b6931`
+(2026-08-31).
+
+**Did this session:**
+- User asked the app to recognise a new Shelly. First pass scanned the LAN
+  without reading Grok recaps — wrong order. 31 Aug session had already
+  joined it to `tpdeco` at **192.168.1.157**, MAC **48:F6:EE:DC:47:88**,
+  model `S4EM-001PXCEU16`.
+- Silent most of the day (STALE ARP then FAILED; power-cycle did not
+  immediately help). Back **online 22:47**, same IP, ~1105 W / 232 V / 4.8 A.
+- **Code in.** Alias **Hot Water** (MAC-keyed). `power/shelly_client.py`;
+  collector + dashboard + morning summary. History from `EM1Data.GetData`
+  1-min records (GetNetEnergies empty until a full hour). Saved rows:
+  2026-08-31 16:00 (0 Wh), 2026-09-02 22:00 (16 Wh).
+- Local web UI: **http://192.168.1.157/** (Shelly Web Admin, no auth).
+  Dashboard: http://192.168.1.106:8091.
+
+**Unfinished / next:**
+- Nightly 00:15 collector will keep filling hours. Daily chart shows
+  completed days only — today's 16 Wh appears there tomorrow.
+- DHCP may move `.157`; key by MAC. Device UI vs our dashboard are
+  different URLs.
+- Do not treat `.205` / `40:f5:20:39:df:b0` as this device.
+
+**Key files touched:**
+- `power/shelly_client.py` — new
+- `power/config.yaml`, `power/collector.py`, `power/db.py`,
+  `power/dashboard/app.py`, `power/dashboard/templates/index.html`
+- `memory/shelly-em-mini-gen4.md`, `MEMORY.md`, `memory.md`,
+  `memory/power-monitoring-live.md`, `session_history.md`
+
+## 2026-07-28 18:05 — Scoped EARU WiFi breaker (EAWCBT-J) as a possible new power-monitoring source
+
+**Resume:** `cd /home/nick/ai_gen_proj/home_auto && claude --resume 6bf41eb8-639e-4023-ad6a-c86c421ab5c1`
+
+**Did this session:**
+- User asked about a new gadget: **EARU Electric EAWCBT-J**, WiFi smart circuit breaker, 40A tap, DIN-rail mount, controlled via the **Tuya "Smart Life"** app (not a proprietary EARU app). Confirmed via web search: leakage protection + overcurrent, 2.4GHz-only WiFi, energy monitoring (W/V/A/kWh), power-failure memory.
+- User's actual goal: read its daily wattage and fold it into the existing 07:30 phone summary alongside the Tapo P110 numbers.
+- Confirmed data access is possible, but flagged it's a **different integration shape** than the Tapo plugs: two paths — (1) Tuya Cloud API (link Smart Life account to a Tuya IoT developer project, query over HTTPS, no LAN dependency) or (2) local polling via `tinytuya` (extract local key, poll on LAN, same style as `tapo_client.py`).
+- Key unresolved unknown: whether this device exposes a **cumulative energy datapoint** (e.g. `add_ele`) that can be diffed day-to-day like the P110's on-device `get_energy_data` history — or only **instantaneous power** (`cur_power`), which would require adding a continuous polling/integration loop that `power/` doesn't currently have (see `POWER_MONITORING_SCOPE.md` §3, "device-history only — no continuous polling").
+- No code written this session — this was scoping/research only, ahead of an actual purchase/install decision.
+
+**Unfinished / next:**
+- Nothing installed yet — this was pre-purchase research.
+- Once the breaker is installed: check its actual Tuya DP schema (via Tuya IoT Platform device-debug panel, or `tinytuya`'s scan/wizard) to learn which of the two data-access paths applies before writing any collector code.
+- If it turns out to be instantaneous-power-only, the `power/` architecture will need a genuinely new polling component — not a drop-in alias addition like the Tapo devices get.
+
+**Key files touched:**
+- None (research/discussion only; no repo files changed this session).
+
+
+
+**Resume:** `cd /home/nick/ai_gen_proj/home_auto && claude --resume 3aa83b5c-cfe2-4b26-a649-d912f699a41f`
+
+**Did this session:**
+- Goal: find the IP of Nick's WiFi-connected **Econova** heat pump hot water service.
+- Mapped the LAN via ping sweep + ARP + reverse DNS. Every host resolved to something identifiable (bosch-dishwasher `.18`, Foxtel `.75`, Tapo H100 `.150`, P110 `.56`, Deco-M5 `.204`, Nest Hub `.184`, Chromecast `.171`, phones/iPads) **except one**.
+- **Best candidate: `192.168.1.205`** — MAC `40:f5:20:39:df:b0` (Espressif OUI), DHCP hostname `ESP-39DFB0` (factory default). TTL 128, latency 2.6–95 ms = WiFi power-save.
+- Full **1–65535 TCP scan: only port 45000 open** (verified stable over repeat probes). Sends no banner; silently swallows HTTP/1.0, HTTP/1.1, TLS, newline, text, JSON → proprietary binary protocol.
+- UDP silent on mDNS 5353, SSDP 1900, Tuya 6666/6667, SNMP 161, NetBIOS 137, WS-Disc 3702. A **75 s passive broadcast listen saw zero packets from `.205`**, ruling out a standard Tuya/Smart Life module (those beacon ~every 5 s); other devices chattered normally so the listener worked.
+- No packet capture possible: `tcpdump` present but `sudo` needs a password and `tshark` isn't installed.
+- Deliberately **did not** send arbitrary binary to tcp/45000 — on a proprietary control channel a random byte sequence could act as a command, and the user asked for read-only.
+- **Conclusion the user agreed with:** with no readable local API the module itself is futile. Pivot to *measuring the electricity* rather than asking the appliance. Recommended Shelly EM Gen3 + CT clamp (documented local REST/JSON + MQTT, no cloud) — or a Tapo P110 outright if the unit turns out to be plugged into a GPO rather than hardwired.
+
+**Unfinished / next:**
+- **Open question that decides everything:** is the Econova on a normal power point or hardwired on its own circuit? Plugged in → add one line to `power/config.yaml`, existing pipeline handles it. Hardwired → Shelly EM + clamp, electrician required.
+- `.205` is **inference, not proof**. To confirm: read the Ecogenica owner's manual, or switch the unit off at the isolator and watch `ip neigh show dev enp1s0` for `.205` dropping out then returning (definitive), or run `sudo timeout 120 tcpdump -i enp1s0 -n -s0 host 192.168.1.205` and read the DNS names.
+- Shelly AU stock/pricing not verified (sells via local resellers, not direct).
+- Long-shot path if ever wanted: tcp/45000 may be how the phone app does local control, so the protocol is observable — but capturing phone→appliance traffic on a switched mesh is fiddly and it's an undocumented binary format. Poor effort-to-reward.
+- Two files uncommitted (see below) — not pushed to GitHub yet.
+
+**Key files touched:**
+- `memory/hot-water-econova-ip.md` — new; candidate IP/MAC, full scan findings, three confirmation methods, monitoring pivot
+- `MEMORY.md` — added pointer line, flagged UNCONFIRMED
+- No code changed. Scan scripts were throwaway, left in the session scratchpad.
+
 ## 2026-07-18 16:20 — T310 sensor monitoring built, live & backed up
 
 **Resume:** `cd /home/nick/ai_gen_proj/home_auto && claude --resume 1332cafe-98e7-4d78-bf4d-df8fc5c34a05`

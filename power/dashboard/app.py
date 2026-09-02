@@ -1,4 +1,4 @@
-"""LAN dashboard for Tapo power monitoring.
+"""LAN dashboard for home power monitoring (Tapo plugs + Shelly meters).
 
 Run: uv run uvicorn dashboard.app:app --host 0.0.0.0 --port 8090
 Serves device status (live, queried on demand) and usage charts from SQLite.
@@ -17,6 +17,7 @@ from starlette.requests import Request
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import db  # noqa: E402
+import shelly_client  # noqa: E402
 import tapo_client  # noqa: E402
 
 app = FastAPI(title="Home Power")
@@ -171,24 +172,51 @@ async def api_live():
             r["alias"]: r["last_seen"]
             for r in conn.execute("SELECT alias, last_seen FROM devices")
         }
-        devices = await tapo_client.find_devices(cfg["devices"], cached, cfg["lan"])
+        tapo_wanted = db.tapo_aliases(cfg)
+        shelly_map = db.shelly_wanted(cfg)
+        tapo_devs, shelly_devs = await asyncio.gather(
+            tapo_client.find_devices(tapo_wanted, cached, cfg["lan"]),
+            asyncio.to_thread(shelly_client.find_devices, shelly_map, cached, cfg["lan"]),
+        )
         out = []
         for alias in cfg["devices"]:
-            dev = devices.get(alias)
-            entry = {"alias": alias, "reachable": dev is not None,
+            entry = {"alias": alias, "reachable": False,
                      "last_collected": last_collected.get(alias)}
-            if dev is not None:
-                try:
-                    info = tapo_client.device_info(dev)
-                    live = await tapo_client.get_live(dev)
-                    db.upsert_device(conn, alias, info["model"], info["mac"],
-                                     info["ip"], info["fw"])
-                    entry.update(info)
-                    entry.update(live)
-                except Exception:
-                    entry["reachable"] = False
-                finally:
-                    await dev.disconnect()
+            if alias in shelly_map:
+                rec = shelly_devs.get(alias)
+                if rec is not None:
+                    try:
+                        info = shelly_client.device_info(rec)
+                        live = await asyncio.to_thread(shelly_client.get_live, rec["ip"])
+                        db.upsert_device(conn, alias, info["model"], info["mac"],
+                                         info["ip"], info["fw"])
+                        entry["reachable"] = True
+                        entry.update(info)
+                        entry.update(live)
+                        month_start = date.today().replace(day=1).isoformat()
+                        prior = conn.execute(
+                            """SELECT COALESCE(SUM(wh),0) FROM daily_energy
+                               WHERE alias=? AND date>=? AND date<?""",
+                            (alias, month_start, date.today().isoformat()),
+                        ).fetchone()[0]
+                        entry["month_wh"] = prior + (entry.get("today_wh") or 0)
+                    except Exception:
+                        entry["reachable"] = False
+            else:
+                dev = tapo_devs.get(alias)
+                if dev is not None:
+                    try:
+                        info = tapo_client.device_info(dev)
+                        live = await tapo_client.get_live(dev)
+                        db.upsert_device(conn, alias, info["model"], info["mac"],
+                                         info["ip"], info["fw"])
+                        entry["reachable"] = True
+                        entry.update(info)
+                        entry.update(live)
+                    except Exception:
+                        entry["reachable"] = False
+                    finally:
+                        await dev.disconnect()
             out.append(entry)
         conn.commit()
         conn.close()
